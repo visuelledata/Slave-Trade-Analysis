@@ -14,7 +14,9 @@ slave_db <- haven::read_sav("Data/tastdb-exp-2016.sav")
 
 slave_db <- slave_db %>% 
   convert_to_NA('NaN') %>% 
-  remove_empty_cols() #removes adult4 (adults embarked at second point of purchase)
+  remove_empty_cols() %>% #removes adult4 (adults embarked at second point of purchase)
+  select_if(function(col) {sum(!is.na(col)) > 10000})
+
   
 ```
 
