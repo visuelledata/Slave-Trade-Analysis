@@ -1,32 +1,53 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "Untitled"
+author: "Chris Peralta"
+date: "May 10, 2018"
+output: html_document
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
 
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
-
-```{r}
 library(tidyverse)
 library(janitor)
+library(lubridate)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
 slave_db <- haven::read_sav("Data/tastdb-exp-2016.sav")
 
 slave_db <- slave_db %>% 
-  convert_to_NA('NaN') %>% 
-  remove_empty_cols() %>% #removes adult4 (adults embarked at second point of purchase)
-  select_if(function(col) {sum(!is.na(col)) > 10000})
-
-  
+  convert_to_NA(c('NaN', '')) %>% 
+  remove_empty(c('rows', "cols")) %>% #removes adult4 (adults embarked at second point of purchase)
+  select_if(function(col) {sum(!is.na(col)) > 10000}) %>% 
+  select(-c(datedepa, datedepb, datedepc)) #already joined in datedep car
 ```
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
 
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
-
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
 
 ```{r}
+glimpse(slave_db)
+
+
+
+
+
+
+
+
+
+```
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
 slave_db %>% 
     ggplot(aes(x = guns, y = tonnage)) + 
     geom_jitter() + 
@@ -52,20 +73,6 @@ slave_db %>%
   geom_col()
 
 
-
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
