@@ -3,76 +3,111 @@ title: "Untitled"
 author: "Chris Peralta"
 date: "May 10, 2018"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-
+options(max.print = 10)
 library(tidyverse)
 library(janitor)
 library(lubridate)
+library(naniar)
+library(labelled)
+library(stringr)
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+For cleaning this data, I'm going to take some preliminary steps and then drop the variables
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
 ```{r cars}
-slave_db <- haven::read_sav("Data/tastdb-exp-2016.sav")
+tast_db <- haven::read_sav("Data/tastdb-exp-2016.sav")
 
-slave_db <- slave_db %>% 
-  convert_to_NA(c('NaN', '')) %>% 
-  remove_empty(c('rows', "cols")) %>% #removes adult4 (adults embarked at second point of purchase)
-  select_if(function(col) {sum(!is.na(col)) > 10000}) %>% 
-  select(-c(datedepa, datedepb, datedepc)) #already joined in datedep car
+
+tast_db <- tast_db %>% 
+  convert_to_NA(c('')) %>% #some missing values are coded with empty strings
+  remove_empty(c('rows', "cols"))#removes adult4, no data in this col
 ```
 
 
+Use tonmod as it is the imputed variable that standardizes all of the tonnage measurements. One of the database creators, says that it is the least reliable imputed variable but I will use it rather than attempt to reimpute the variable more accurately.
+http://www.slavevoyages.org/voyage/understanding-db/methodology-19
+
+-Removed the data sources
+-Removed evgreen (another data source)
+-For voyage itinerary use imputed variables
+
+-Removed intended
+- 
 
 ```{r}
-glimpse(slave_db)
+glimpse(tast_db)
+
+tast <- tast_db %>% 
+  select(-starts_with('source')) %>% 
+  select(-tontype, -tonnage, -evgreen) %>% 
+  select(-starts_with('slin')) %>% 
+  set_na_values(fate4 = 4) %>% 
+  user_na_to_na()
 
 
 
+prop_miss(tast) # 77.6% of values are missing
 
+var_miss_over_50 <- tast %>%
+  miss_var_summary() %>% 
+  arrange(desc(pct_miss)) %>% 
+  filter(pct_miss > 50) %>% 
+  pull(variable)
+  
 
-
-
-
+tast <- tast %>% 
+  select(-one_of(setdiff(var_miss_over_50, c('Date_land1', 'dateland1', 
+                                                   'Date_land2',
+                                     'dateland2', 'Date_land3', 'dateland3', 
+                                     'dateend','Date_end', 'dateleftafr','Date_leftafr',
+                                     'Date_buy', 'datebuy', 'Date_depam', 'datedepam'))))
+                                            #keeping these dates for now
 
 ```
-## Including Plots
 
-You can also embed plots, for example:
+
+Variables of note: shipname, national, tonmod (Tonnage standardized on Briti sh measured tons,1773-1835), yrcons, guns, placcons, owner_
+
+fate: 
+   Condemned- By the general practice of the law of nations, a sentence of condemnation is, at present, generally deemed necessary in order to divest the title of a vessel taken as a prize. Until this has been done the original owner may regain his property, although the ship may have been in possession of the enemy twenty-four hours, or carried infra praesidia. https://legal-dictionary.thefreedictionary.com/condemnation
+   1- voyage completed as intended
+   40- sold
+   49- Sold slaves in Americas - subsequent fate unknown 
+   68- Sold in the Americas after disembarking slaves
+   70- Sold in the Americas - not known whether ship brought slaves 
+   77- Arrived in Africa, subsequent fate unknown 
+   86- Ship returned direct to home port after selling slaves to another vessel 
+   88- Sold prematurely in Europe after disembarking slaves in the Americas 
+   98- Ship and slaves sold in Africa
+   188- Temporarily detained by the Dutch: Voyage allowed to continue with slaves. 
+
+
+
+
+Below, I will use the historically imputed dates to randomply impute years
 
 ```{r pressure, echo=FALSE}
-slave_db %>% 
-    ggplot(aes(x = guns, y = tonnage)) + 
-    geom_jitter() + 
-    facet_wrap(~national)
+tast1 %>% glimpse()
 
+to_character(tast$fate4)
+tast %>% 
+  mutate(year5 = to_character(year5)) %>% 
+  select(year5)
 
-slave_db %>% 
-  ggplot(aes(slintend, tslavesd)) + 
-  geom_point()
+tast %>% select(starts_with('year')) %>% glimpse() #
 
-
-slave_db %>% 
-  ggplot(aes(sladamer, sladvoy)) + 
-  geom_jitter()
-
-
-slave_db %>% 
-  group_by(resistance) %>% 
-  count() %>% 
-  arrange(desc(n)) %>% 
-  head(n = 10) %>% 
-  ggplot(aes(x = factor(resistance), y = n)) + 
-  geom_col()
-
+tast %>% 
+  count(factor(fate4)) %>% 
+  ggplot() + geom_col(aes(x = fct_reorder(`factor(fate4)`, -n), y = n))
 
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
