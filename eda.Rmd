@@ -16,6 +16,8 @@ library(lubridate)
 library(naniar)
 library(labelled)
 library(stringr)
+
+source('functions/word_count.R')
 ```
 
 
@@ -56,25 +58,29 @@ tast <- tast_db %>%
 
 prop_miss(tast) # 77.6% of values are missing
 
-var_miss_over_50 <- tast %>%
+var_miss_under_50 <- tast %>%
   miss_var_summary() %>% 
   arrange(desc(pct_miss)) %>% 
-  filter(pct_miss > 50) %>% 
+  filter(pct_miss < 50) %>% 
   pull(variable)
   
-
-tast <- tast %>% 
-  select(-one_of(setdiff(var_miss_over_50, c('Date_land1', 'dateland1', 
-                                                   'Date_land2',
-                                     'dateland2', 'Date_land3', 'dateland3', 
-                                     'dateend','Date_end', 'dateleftafr','Date_leftafr',
-                                     'Date_buy', 'datebuy', 'Date_depam', 'datedepam'))))
-                                            #keeping these dates for now
+tast1 <- tast %>% 
+  select(one_of(var_miss_under_50), -national)
+# tast <- tast %>% 
+#   select(-one_of(setdiff(var_miss_over_50, c('Date_land1', 'dateland1', 
+#                                                    'Date_land2',
+#                                      'dateland2', 'Date_land3', 'dateland3', 
+#                                      'dateend','Date_end', 'dateleftafr','Date_leftafr',
+#                                      'Date_buy', 'datebuy', 'Date_depam', 'datedepam'))),
+#          -national) # Use natinimp, the imputed version
+#                                             #keeping these dates for now
 
 ```
 
 
 Variables of note: shipname, national, tonmod (Tonnage standardized on Briti sh measured tons,1773-1835), yrcons, guns, placcons, owner_
+
+note: xmimpflag is a variable grouping the voyages for the purpose of imputing slave counts
 
 fate: 
    Condemned- By the general practice of the law of nations, a sentence of condemnation is, at present, generally deemed necessary in order to divest the title of a vessel taken as a prize. Until this has been done the original owner may regain his property, although the ship may have been in possession of the enemy twenty-four hours, or carried infra praesidia. https://legal-dictionary.thefreedictionary.com/condemnation
@@ -89,25 +95,164 @@ fate:
    98- Ship and slaves sold in Africa
    188- Temporarily detained by the Dutch: Voyage allowed to continue with slaves. 
 
+tonmod was dropped with 53.6% of it's values missing, consider adding some of the variables back. 
 
 
 
-Below, I will use the historically imputed dates to randomply impute years
-
-```{r pressure, echo=FALSE}
+Here, I will set the columns to the proper data structures
+```{r}
 tast1 %>% glimpse()
+#factors: captaina, ownera, shipname
+#dates: datedep, dateland1
+#to_factor: deptregimp, deptregimp1, starts_with("m"), natinimp, plac1tra, portdep, ptdepimp, regdis1, regem1, rig, sla1port
 
-to_character(tast$fate4)
-tast %>% 
-  mutate(year5 = to_character(year5)) %>% 
-  select(year5)
+temp <- tast1 %>% 
+  select(-starts_with('fate')) %>%
+  mutate_if(is.labelled, to_factor) %>% 
+  mutate_at(vars(captaina, ownera, shipname), factor) %>% 
+  mutate_if(is.character, ymd) %>% 
+  select(-`filter_$`)
 
-tast %>% select(starts_with('year')) %>% glimpse() #
+tast1 <- tast1 %>% 
+  select(starts_with('fate')) %>% 
+  bind_cols(temp)
 
-tast %>% 
-  count(factor(fate4)) %>% 
-  ggplot() + geom_col(aes(x = fct_reorder(`factor(fate4)`, -n), y = n))
+
+tast1 %>% select(starts_with("datedep")) %>% miss_var_summary() 
+tast1 %>% select(starts_with("datedep")) %>% View() 
+#datedep is constructed from datedepa,b,c
+
+tast1 %>% select(starts_with("datarr")) %>% miss_var_summary() 
+tast1 %>% select(starts_with("datarr"), dateland1) %>% View() 
+#dateland1 is constructed from datarr32, 33, 34
+
+tast1 %>% 
+  mutate_at(.vars = vars(matches("^year\\d{1,2}")), .funs = funs(to_character)) %>% 
+  select(starts_with('year')) 
 
 ```
 
+
+
+Need to look at years
+```{r pressure, echo=FALSE}
+tast1 %>% glimpse()
+
+
+
+tast %>% select(matches('^year\d')) %>% glimpse() #
+
+tast1 %>% 
+  count(factor(fate4)) %>% 
+  ggplot() + geom_col(aes(x = fct_reorder(`factor(fate4)`, -n), y = n))
+
+
+tast1 %>% miss_var_summary() %>% arrange(desc(n_miss)) %>% View()
+
+tast1 %>% 
+  ggplot(aes(x = yeardep)) + 
+  geom_bar()
+
+
+```
+
+
+
+Analyzing the 'fate' variable for possible, more generalized, recodings
+```{r}
+tast1 %>% 
+  mutate(fate_char = to_character(fate)) %>% 
+  possibly_word_count(fate_char) %>% View()
+#completed, sold, 
+  
+```
+
+Some EDA. Below, I split the 'fate' variable into 'As intended' and 'Not as intended'. I'm currently trying to find out which variables are likely to contribute to a successful transatlantic voyage, to better understand the data. At fate == 1, the value is 'Voyage completed as intended, which is why I've chosen to recode the variable in this manner. 
+The '_re' suffix is shorthand for 'recoded'. 
+```{r}
+tast_re <- tast1 %>% 
+  mutate(fate_re = case_when(fate == 1 ~ 'As intended', 
+                             fate >= 1 ~ 'Not as intended')) %>% 
+  mutate(fate_re = as.factor(fate_re))
+
+
+qplot(x = yeardep, fill = fate_re, data = tast_re, geom = 'histogram')
+  #appears to be trend between year departed and fate
+
+# The data is not missing at random.
+tast1 %>% 
+  mutate(row_missing = prop_miss_row(tast1)) %>% 
+  group_by(yeardep) %>% 
+  summarize(year_missing = mean(row_missing)) %>% 
+  qplot(x = yeardep, y = year_missing, 
+        data = ., 
+        geom = 'point') + 
+  geom_vline(xintercept = 1807) + 
+  geom_vline(xintercept =  1836) + 
+  annotate('text', label = 'Great Britain outlawed slavery 1807', 
+           x = 1800, y = .45, angle = 90) + 
+  annotate('text', label = 'Portugal outlawed slavery 1836', 
+           x = 1829, y = .45, angle = 90)
+
+
+```
+
+
+As you can see below, the data is not missing at random. There is more missing data for earlier years and less for later years, until 1807 when Great Britain made it illegal to engage in the slave trade. The same year, the US passed The Act Prohibiting Importation of Slaves of 1807
+```{r}
+# The data is not missing at random.
+tast1 %>% 
+  mutate(row_missing = prop_miss_row(tast1)) %>% 
+  group_by(yeardep) %>% 
+  summarize(year_missing = mean(row_missing)) %>% 
+  qplot(x = yeardep, y = year_missing, 
+        data = ., 
+        geom = c('smooth', 'point')) + 
+  geom_vline(xintercept = 1807) + 
+  geom_vline(xintercept =  1836) + 
+  annotate('text', label = 'Great Britain outlawed slavery 1807', 
+           x = 1800, y = .45, angle = 90) + 
+  annotate('text', label = 'Portugal outlawed slavery 1836', 
+           x = 1829, y = .45, angle = 90)
+
+
+```
+
+
+
+
+playing around with modelling
+
+```{r}
+train <- createDataPartition(tast_re$fate_re, p = .6, list = FALSE)
+training <- tast_re[train, ]
+testing <- tast_re[-train, ]
+
+mod2 <- glm(fate_re ~ dateland1, data = training, family = binomial(link = 'logit'), na.action = na.omit)
+
+mod1 <- polr(fate2 ~ dateland1, 
+            data = training, na.action = na.omit, Hess = TRUE) 
+
+
+
+testing %>% 
+  mutate(pred = predict(mod2, ., type = 'response')) %>% 
+  ggplot(aes(x = pred, fill = fate_re)) + 
+  geom_histogram()
+
+
+p <- predict(mod2, testing, type="response")
+
+p_class <- if_else(p > 0.7729328, 'Success', 'Not Success')
+
+confusionMatrix(as.factor(p_class), testing$fate_re)
+
+
+#Caret syntax
+mod <- train(fate_re ~ dateland1, 
+             data = training, na.action = na.omit, 
+             method = 'glm', family = 'binomial')
+
+
+```
 
