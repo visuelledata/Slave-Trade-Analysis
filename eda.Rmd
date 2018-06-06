@@ -52,22 +52,23 @@ tast <- tast_db %>%
   select(-tontype, -tonnage, -evgreen) %>% 
   select(-starts_with('slin')) %>% 
   set_na_values(fate4 = 4) %>% 
-  user_na_to_na()
+  user_na_to_na() %>% 
+  mutate(fate4 = to_factor(fate4))
 
 
 
 prop_miss(tast) # 77.6% of values are missing
 
-var_miss_under_50 <- tast %>%
+var_missing_under_50 <- tast %>%
   miss_var_summary() %>% 
   arrange(desc(pct_miss)) %>% 
-  filter(pct_miss < 50) %>% 
-  pull(variable)
+  filter(pct_miss < 53.6) %>% 
+  pull(variable) 
   
 tast1 <- tast %>% 
-  select(one_of(var_miss_under_50), -national)
+  select(one_of(var_missing_under_50), -national)
 # tast <- tast %>% 
-#   select(-one_of(setdiff(var_miss_over_50, c('Date_land1', 'dateland1', 
+#   select(-one_of(setdiff(var_missing_under_50, c('Date_land1', 'dateland1', 
 #                                                    'Date_land2',
 #                                      'dateland2', 'Date_land3', 'dateland3', 
 #                                      'dateend','Date_end', 'dateleftafr','Date_leftafr',
@@ -82,20 +83,7 @@ Variables of note: shipname, national, tonmod (Tonnage standardized on Briti sh 
 
 note: xmimpflag is a variable grouping the voyages for the purpose of imputing slave counts
 
-fate: 
-   Condemned- By the general practice of the law of nations, a sentence of condemnation is, at present, generally deemed necessary in order to divest the title of a vessel taken as a prize. Until this has been done the original owner may regain his property, although the ship may have been in possession of the enemy twenty-four hours, or carried infra praesidia. https://legal-dictionary.thefreedictionary.com/condemnation
-   1- voyage completed as intended
-   40- sold
-   49- Sold slaves in Americas - subsequent fate unknown 
-   68- Sold in the Americas after disembarking slaves
-   70- Sold in the Americas - not known whether ship brought slaves 
-   77- Arrived in Africa, subsequent fate unknown 
-   86- Ship returned direct to home port after selling slaves to another vessel 
-   88- Sold prematurely in Europe after disembarking slaves in the Americas 
-   98- Ship and slaves sold in Africa
-   188- Temporarily detained by the Dutch: Voyage allowed to continue with slaves. 
-
-tonmod was dropped with 53.6% of it's values missing, consider adding some of the variables back. 
+tonmod was dropped, above,  with 53.6% of it's values missing, consider adding some of the variables back. 
 
 
 
@@ -159,12 +147,20 @@ tast1 %>%
 
 
 Analyzing the 'fate' variable for possible, more generalized, recodings
+
+fate: 
+   Condemned- By the general practice of the law of nations, a sentence of condemnation is, at present, generally deemed necessary in order to divest the title of a vessel taken as a prize. Until this has been done the original owner may regain his property, although the ship may have been in possession of the enemy twenty-four hours, or carried infra praesidia. https://legal-dictionary.thefreedictionary.com/condemnation
+
+
+See regroupings.txt for tast$fate recodings
+
 ```{r}
 tast1 %>% 
   mutate(fate_char = to_character(fate)) %>% 
-  possibly_word_count(fate_char) %>% View()
-#completed, sold, 
-  
+  word_count(fate_char)
+
+#keywords: completed, sold, captured, destroyed shipwrecked
+
 ```
 
 Some EDA. Below, I split the 'fate' variable into 'As intended' and 'Not as intended'. I'm currently trying to find out which variables are likely to contribute to a successful transatlantic voyage, to better understand the data. At fate == 1, the value is 'Voyage completed as intended, which is why I've chosen to recode the variable in this manner. 
@@ -176,23 +172,106 @@ tast_re <- tast1 %>%
   mutate(fate_re = as.factor(fate_re))
 
 
-qplot(x = yeardep, fill = fate_re, data = tast_re, geom = 'histogram')
-  #appears to be trend between year departed and fate
+qplot(x = yeardep, 
+      data = tast_re,
+      geom = 'bar')
 
-# The data is not missing at random.
-tast1 %>% 
+tast_re %>% 
   mutate(row_missing = prop_miss_row(tast1)) %>% 
   group_by(yeardep) %>% 
   summarize(year_missing = mean(row_missing)) %>% 
   qplot(x = yeardep, y = year_missing, 
         data = ., 
-        geom = 'point') + 
+        geom = c('point', 'smooth')) + 
   geom_vline(xintercept = 1807) + 
   geom_vline(xintercept =  1836) + 
   annotate('text', label = 'Great Britain outlawed slavery 1807', 
            x = 1800, y = .45, angle = 90) + 
   annotate('text', label = 'Portugal outlawed slavery 1836', 
            x = 1829, y = .45, angle = 90)
+  # The data is not missing at random. Missing data varies by year
+
+tast_re %>% 
+  mutate(row_missing = prop_miss_row(tast1)) %>% 
+  group_by(datedepb) %>% 
+  summarize(month_missing = mean(row_missing)) %>% 
+  filter(!is.na(datedepb)) %>% 
+  qplot(x = factor(datedepb), y = month_missing,  
+        data = ., 
+        geom = c('point')) +
+  scale_y_continuous(limits = c(0,.4))
+  # Looks like missing data barely increases from june to december, which is during
+  # atlantic hurricane season. This may indicate that poor weather could be affecting the 
+  # outcome of the journey, thus making it harder to collect data 
+
+  
+  
+tast_re %>% 
+  mutate(row_missing = prop_miss_row(tast_re)) %>% 
+  group_by(yeardep, fate_re) %>% 
+  summarize(year_missing = mean(row_missing)) %>% 
+  qplot(x = yeardep, y = year_missing, color = fate_re,
+        data = ., 
+        geom = c('point', 'smooth')) + 
+  geom_vline(xintercept = 1807) + 
+  geom_vline(xintercept =  1836) + 
+  annotate('text', label = 'Great Britain outlawed slavery 1807', 
+           x = 1800, y = .45, angle = 90) + 
+  annotate('text', label = 'Portugal outlawed slavery 1836', 
+           x = 1829, y = .45, angle = 90) 
+  # Obs with 'Voyage completed as intended', are missing less data
+
+
+
+
+
+qplot(x = yeardep, fill = fate_re,
+      data = tast_re, 
+      geom = 'histogram') + 
+  scale_fill_manual(values = c('Blue', 'Red'))
+  # appears to be trend between year departed and fate, likely because of the partially known     fates in 'Not as intended'
+
+tast_re %>% 
+  filter(yeardep < 1600) %>% 
+  select(yeardep, fate) %>% 
+  mutate(fate = to_character(fate)) %>% 
+  count(fate) %>% 
+  arrange(desc(n)) %>% 
+  View
+  # 'Not as intended' dominates the previous graph, this appears to be because of                 partially-known fates 
+
+
+qplot(x = slaximp, bins = 40,
+      data = tast_re, 
+      geom = 'histogram')
+qplot(x = slamimp, bins = 40, 
+      data = tast_re, 
+      geom = 'histogram')
+qplot(x = slaximp, y = slamimp, alpha = .1, 
+      data = tast_re, 
+      geom = 'point')
+  # slaximp: slaves embarked, slamimp: slaves disembarked
+
+tast_re %>% 
+  filter(tonmod < 600, slaximp < 1000) %>% 
+  qplot(x = tonmod, y = slaximp, alpha = .00000000001,
+        data = ., 
+        geom = c('jitter', 'smooth'))
+  # It appears that there is some relationship between tonnage and number of slaves embarked,     it also appears that there is a discernible pattern in the imputation
+
+tast_re %>% 
+  mutate(row_missing = prop_miss_row(tast_re)) %>% 
+  group_by(yeardep, fate4) %>% 
+  summarize(year_missing = mean(row_missing)) %>% 
+  qplot(x = yeardep, y = year_missing, facets = ~fate4,
+        data = ., 
+        geom = c('point', 'smooth')) + 
+  geom_vline(xintercept = 1807) + 
+  geom_vline(xintercept =  1836) + 
+  annotate('text', label = 'Great Britain outlawed slavery 1807', 
+           x = 1800, y = .45, angle = 90) + 
+  annotate('text', label = 'Portugal outlawed slavery 1836', 
+           x = 1829, y = .45, angle = 90) 
 
 
 ```
@@ -219,16 +298,34 @@ tast1 %>%
 ```
 
 
+Analyze trip length / duration, 
 
+```{r}
+tast1 %>% glimpse()
+
+
+```
+
+
+
+
+
+Variables most likely to predict fate: 
+yeardep, datedep, datedepb, tonmod, dateland, voy1imp, voy2imp, port began, port endend, slaximp, natinimp, shipname, season
+
+ptdepimp, mjslptimp can't be used as factors, because there will be values in the training set that aren't present in the testing set, need to convert the strings to numeric. Also consider calculating the distance between ports
 
 playing around with modelling
 
 ```{r}
+library(caret)
 train <- createDataPartition(tast_re$fate_re, p = .6, list = FALSE)
 training <- tast_re[train, ]
 testing <- tast_re[-train, ]
 
-mod2 <- glm(fate_re ~ dateland1, data = training, family = binomial(link = 'logit'), na.action = na.omit)
+mod2 <- glm(fate_re ~ yeardep + tonmod + natinimp + slamimp + slaximp + 
+                      slaximp*slamimp, 
+            data = training, family = binomial(link = 'logit'), na.action = na.omit)
 
 mod1 <- polr(fate2 ~ dateland1, 
             data = training, na.action = na.omit, Hess = TRUE) 
