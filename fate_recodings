@@ -17,7 +17,6 @@ Look at other fate variables for more easy recoding.
 #Partial success:
 40 Sold 
 41 Left coast with trading cargo intact 
-48 Captured by pirates - slaves sold in Americasfrom another ship 
 68 Sold in the Americas after disembarking slaves 
 70 Sol d i n the Americas - not known whether ship brought slaves
 72 Driven off the African Coast with slaves on board
@@ -73,6 +72,7 @@ Look at other fate variables for more easy recoding.
 45 Captured unspecified before slaves embarked
 46 Captured unspecified after embarkation of slaves
 47 Captured unspecified after slaves disembarked 
+48 Captured by pirates - slaves sold in Americasfrom another ship 
 50 Captured by the French - before slaves embarked
 51 Captured by the French - after embarkation of slaves
 52 Captured by the French - after slaves disembarked
