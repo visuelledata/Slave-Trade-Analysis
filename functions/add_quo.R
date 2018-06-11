@@ -12,7 +12,7 @@ add_quo <- function(...) {
     unlist() %>%                                # Makes them mappable
     map_if(negate(is.name), 
            .f = function(x) {return(TRUE)}) %>% # Replaces unnecessary args with TRUE
-    map_if(is.name, as_character) %>%           # Converts named arguments to characters
+    map_if(is.name, as.character) %>%           # Converts named arguments to characters
     map_if(is.character, exists) %>%            # Replaces named args that aren't objects as FALSE
     unlist()                                    # To make index mappable
   
