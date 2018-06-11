@@ -5,7 +5,7 @@ require(rlang)
 #param ... is any list of arguments
 
 add_quo <- function(...) {
-  ## Formats arguments for use in invoke_map()
+  ## Formats optional arguments for use in invoke_map()
   
   # Create a logical vector for use as an index below
   index <- exprs(...) %>%                       # Captures the arguments
