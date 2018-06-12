@@ -1,12 +1,15 @@
-require(magrittr)
-require(purrr)
+#Need to add warning for functions that produce different types of output
+
+## Checks if args in .call will produce identical output in other functions
 
 #param .call A function call such as '.call = map(1:3, cumsum)'
 #param ...   Functions, for example, lapply() in 'is.out.same(map(1:3, cumsum), lapply)'
 
-is.out.same <- function(.call, ...) {
-  ## Checks if args in .call will produce identical output in other functions
-  
+require(magrittr)
+require(purrr)
+
+is.output.same <- function(.call, ...) {
+
   #Error checking
   .call # To make sure the call is valid before proceeding
   if (!all(map_lgl(list(...), is.function))) stop('An optional argument is not a function.')
