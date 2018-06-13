@@ -34,9 +34,7 @@ word_count <- function(.data, .char_col) {
     group_by(word) %>%                     # Groups by word
     summarize(freq = n()) %>%              # Calculates the number of each word
     arrange(desc(freq))                    # Sorts the tibble by descending frequency
-
 }
-
 # Catches the error thrown by select_if and gives an error message
 word_count <- purrr::possibly(
                         .f = word_count, 

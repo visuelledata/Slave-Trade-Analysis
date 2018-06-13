@@ -14,18 +14,24 @@
 #' sum(1:3) %>%
 #'   identity() %>% 
 #'   is.na() %>%
-#'   find_call() 
+#'   find_call_piped() 
 #'   
    
 find_call_piped <- function(.piped) {
   pipe_env <- purrr::compose(parent.frame, 
                              purrr::partial(tail, n = 3), 
                              purrr::head_while)
+  
   env <- pipe_env(1:sys.nframe(), 
-                  function(.n) (!('chain_parts' %in% ls(envir=parent.frame(.n)))))
-
-  ifelse(exists('chain_parts', env), 
-         return(env$chain_parts$lhs),
-         return(do.call("substitute", list(substitute(.piped), parent.frame())))
-         )
+                  pryr::f(!('chain_parts' %in% ls(envir=parent.frame(.n)))))
+  
+  if (exists('chain_parts', env)) {
+    warning("You have undone the evaluation of the pipe")
+    return(env$chain_parts$lhs)
+  } else {
+    return(do.call("substitute", list(substitute(.piped), parent.frame())))
+  }
 }
+
+
+
